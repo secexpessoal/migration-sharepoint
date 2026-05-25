@@ -21,14 +21,14 @@ export async function logoutAttempt() {
     // 3. Limpa o estado local (Zustand)
     useAuthStore.getState().logout();
 
-    // 4. Força o recarregamento total da aplicação
-    window.location.reload();
+    // 4. Redirecionamento "duro" para a raiz para que o Forward Auth detecte a falta de sessão
+    window.location.href = "/";
   }
 }
 
 /**
  * Remove agressivamente todos os cookies visíveis ao JavaScript.
- * Utiliza um estilo funcional e tenta múltiplas combinações de domínios e caminhos.
+ * Utiliza um estilo funcional e inclui cookies padrão de sessão (__session, XSRF-TOKEN).
  */
 function clearAllClientCookies() {
   const hostname = window.location.hostname;
@@ -37,22 +37,33 @@ function clearAllClientCookies() {
   // Lista de domínios para tentar a limpeza (atual, .atual, e pai se existir)
   const domains = [null, hostname, `.${hostname}`];
   if (domainParts.length > 2) {
-    domains.push(domainParts.slice(-2).join('.'));
-    domains.push(`.${domainParts.slice(-2).join('.')}`);
+    const parentDomain = domainParts.slice(-2).join('.');
+    domains.push(parentDomain);
+    domains.push(`.${parentDomain}`);
   }
 
   // Caminhos comuns onde cookies podem ser injetados
   const paths = ['/', '/v1', '/api'];
 
+  // Nomes de cookies para limpar (mesmos do backend)
+  const cookieNamesToClear = ['access_token', 'refresh_token', '__session', 'XSRF-TOKEN'];
+
+  // 1. Limpa cookies que ele encontra no document.cookie
   document.cookie.split(';').forEach(cookie => {
     const name = cookie.split('=')[0].trim();
-    
-    domains.forEach(domain => {
-      paths.forEach(path => {
-        let cookieString = `${name}=; Path=${path}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
-        if (domain) cookieString += ` Domain=${domain};`;
-        document.cookie = cookieString;
-      });
+    applyClearance(name, domains, paths);
+  });
+
+  // 2. Garante a limpeza dos nomes conhecidos mesmo que não estejam listados (failsafe)
+  cookieNamesToClear.forEach(name => applyClearance(name, domains, paths));
+}
+
+function applyClearance(name: string, domains: (string | null)[], paths: string[]) {
+  domains.forEach(domain => {
+    paths.forEach(path => {
+      let cookieString = `${name}=; Path=${path}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
+      if (domain) cookieString += ` Domain=${domain};`;
+      document.cookie = cookieString;
     });
   });
 }

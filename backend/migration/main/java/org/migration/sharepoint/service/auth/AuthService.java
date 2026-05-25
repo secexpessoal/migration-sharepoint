@@ -112,7 +112,6 @@ public class AuthService {
 
         if (refreshTokenValue != null) {
             try {
-                // Chama o logout externo e CAPTURA a resposta para repassar os cookies de limpeza
                 ResponseEntity<Void> externalLogoutResponse = restClient
                         .post()
                         .uri("/v1/user/logout")
@@ -120,35 +119,52 @@ public class AuthService {
                         .retrieve()
                         .toEntity(Void.class);
 
-                // Repassa os cabeçalhos Set-Cookie do servidor de autenticação (a forma mais garantida)
                 normalizeAndAddCookies(externalLogoutResponse, httpResponse);
-                
-                log.debug("Logout externo concluído, cookies de limpeza repassados");
             } catch (Exception exception) {
-                log.warn("Falha ao notificar servidor externo sobre logout, procedendo com limpeza local", exception);
+                log.warn("Falha ao notificar servidor externo sobre logout", exception);
             }
         }
 
-        // Fallback local: Caso o servidor externo não envie os cookies de limpeza ou falhe
-        // Tentamos limpar os nomes padrão com os atributos mais prováveis
         boolean isSecure = httpRequest.isSecure() || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"));
+        String host = httpRequest.getServerName();
+
+        // Lista de cookies para limpeza baseada no padrão do sistema de referência
+        List<String> cookiesToClear = List.of("access_token", "refresh_token", "__session", "XSRF-TOKEN");
+
+        cookiesToClear.forEach(cookieName -> {
+            // 1. Limpa para o host atual
+            clearLocalCookieAggressively(httpResponse, cookieName, isSecure, null);
+
+            // 2. Limpa para o domínio pai (se houver)
+            if (host != null && host.contains(".") && !host.equalsIgnoreCase("localhost")) {
+                String parentDomain = host.substring(host.indexOf("."));
+                if (parentDomain.length() > 1) {
+                    clearLocalCookieAggressively(httpResponse, cookieName, isSecure, parentDomain);
+                }
+            }
+        });
         
-        // Limpeza local "segura" para o host atual
-        clearLocalCookie(httpResponse, "access_token", isSecure);
-        clearLocalCookie(httpResponse, "refresh_token", isSecure);
-        
-        // Cabeçalho de limpeza profunda (suportado por navegadores modernos)
         httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
     }
 
-    private void clearLocalCookie(HttpServletResponse response, String name, boolean isSecure) {
-        ResponseCookie cookie = ResponseCookie.from(name, "")
+    private void clearLocalCookieAggressively(HttpServletResponse response, String name, boolean isSecure, String domain) {
+        // Envia com HttpOnly true e false para garantir remoção
+        sendClearCookie(response, name, isSecure, domain, true);
+        sendClearCookie(response, name, isSecure, domain, false);
+    }
+
+    private void sendClearCookie(HttpServletResponse response, String name, boolean isSecure, String domain, boolean httpOnly) {
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
-                .httpOnly(true)
                 .secure(isSecure)
-                .sameSite("Lax")
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                .httpOnly(httpOnly)
+                .sameSite("Lax");
+
+        if (domain != null && !domain.isEmpty()) {
+            builder.domain(domain);
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 }
