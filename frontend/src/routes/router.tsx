@@ -1,4 +1,4 @@
-import { createRouter, createRoute, createRootRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/react-router';
 import { AppProvider } from '@lib/app.provider';
 import { ShLayoutComponent } from '@lib/components/sh-layout/layout.component';
 import { JobsRoute } from './jobs/jobs.component';

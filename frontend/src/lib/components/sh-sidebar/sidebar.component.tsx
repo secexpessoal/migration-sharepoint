@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { LayoutDashboard, Database, History, LogOut } from 'lucide-react';
 import { ShButton } from '@lib/components/sh-button/button.component';
 import { useAuthStore } from '@lib/store/auth.store';
@@ -10,19 +10,18 @@ interface ShSidebarProps {
 }
 
 export const ShSidebar = ({ onNavigate }: ShSidebarProps) => {
-  const navigate = useNavigate();
-  const logout = useAuthStore((state) => state.logout);
+  const logoutAction = useAuthStore((state) => state.logout);
 
   const handleLogout = async () => {
     try {
       await logoutAttempt();
-      logout();
-      void navigate({ to: '/login' });
+      // logoutAttempt já executa window.location.reload()
       toast.success('Sessão encerrada com sucesso.');
-    } catch {
-      // Mesmo se falhar o request pro backend, limpamos o local
-      logout();
-      void navigate({ to: '/login' });
+    } catch (error) {
+      // Caso ocorra erro no request, limpamos o estado local e recarregamos manualmente
+      console.error('Falha ao realizar logout no servidor:', error);
+      logoutAction();
+      window.location.reload();
     }
   };
 
