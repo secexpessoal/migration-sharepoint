@@ -9,17 +9,12 @@ package org.migration.sharepoint.controller.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.migration.sharepoint.controller.auth.dto.AuthenticationRequest;
 import org.migration.sharepoint.controller.auth.dto.AuthenticationResponse;
-import org.migration.sharepoint.controller.auth.dto.FirstChangePasswordRequest;
 import org.migration.sharepoint.service.auth.AuthService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,27 +25,30 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/login")
-    public AuthenticationResponse login(
-            @Valid @RequestBody AuthenticationRequest request, HttpServletResponse response) {
-        return authService.login(request, response);
-    }
+    @GetMapping("/me")
+    public AuthenticationResponse.UserResponse getMe(HttpServletRequest request) {
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String token = null;
 
-    @PostMapping("/first-reset")
-    public Map<String, String> firstReset(
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
-            @Valid @RequestBody FirstChangePasswordRequest request) {
-        String token = authHeader.substring(7);
-        return authService.firstReset(token, request);
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            token = java.util.Arrays.stream(request.getCookies())
+                    .filter(cookie -> "access_token".equals(cookie.getName()))
+                    .map(jakarta.servlet.http.Cookie::getValue)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (token == null) {
+            throw new org.springframework.security.authentication.BadCredentialsException("Sessão inválida");
+        }
+
+        return authService.validateToken(token);
     }
 
     @PostMapping("/logout")
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         authService.logout(request, response);
-    }
-
-    @PostMapping("/refresh")
-    public AuthenticationResponse refresh(HttpServletRequest request, HttpServletResponse response) {
-        return authService.refresh(request, response);
     }
 }

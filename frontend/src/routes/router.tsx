@@ -4,9 +4,8 @@ import { ShLayoutComponent } from '@lib/components/sh-layout/layout.component';
 import { JobsRoute } from './jobs/jobs.component';
 import { ConnectionsRoute } from './connections/connections.component';
 import { LogsRoute } from './logs/logs.component';
-import { LoginPage } from './auth/login/login.component';
-import { ResetPasswordPage } from './auth/reset-password/reset-password.component';
 import { useAuthStore } from '@lib/store/auth.store';
+import { getMe } from './auth/services/auth.service';
 
 // Root Route
 const rootRoute = createRootRoute({
@@ -19,41 +18,42 @@ const rootRoute = createRootRoute({
   ),
 });
 
-// Auth Routes (Public)
-const loginRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/login',
-  component: LoginPage,
-  beforeLoad: () => {
-    const { isAuthenticated, passwordResetRequired } = useAuthStore.getState();
-    if (isAuthenticated) {
-      if (passwordResetRequired) throw redirect({ to: '/reset-password' });
-      throw redirect({ to: '/' });
-    }
-  },
-});
-
-const resetPasswordRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/reset-password',
-  component: ResetPasswordPage,
-});
-
 // Layout Route (Protected)
 const layoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'layout',
   component: ShLayoutComponent,
-  beforeLoad: () => {
-    const { isAuthenticated, passwordResetRequired } = useAuthStore.getState();
-    if (!isAuthenticated) {
-      throw redirect({ to: '/login' });
+  beforeLoad: async () => {
+    const { isAuthenticated, user, logout } = useAuthStore.getState();
+
+    // Caso 1: Se não houver sessão ou dados do usuário (ex: F5 ou expiração), tenta recuperar via perfil
+    if (!isAuthenticated || !user) {
+      try {
+        const profile = await getMe();
+        validateAdminAccess(profile.roles, logout);
+      } catch (error) {
+        console.error('Falha na autenticação via cookie ou perfil inválido', error);
+        logout();
+        // Em Forward Auth, o gateway redirecionaria, mas aqui limpamos o estado
+      }
+      return;
     }
-    if (passwordResetRequired) {
-      throw redirect({ to: '/reset-password' });
-    }
+
+    // Caso 2: Já autenticado localmente, apenas garante que ainda é um administrador
+    validateAdminAccess(user.roles, logout);
   },
 });
+
+/**
+ * Valida se a lista de roles contém permissão de administrador.
+ * Caso contrário, executa logout e lança erro para interromper a rota.
+ */
+function validateAdminAccess(roles: string[], logoutAction: () => void) {
+  if (!roles.includes('ROLE_ADMIN')) {
+    logoutAction();
+    throw new Error('Acesso negado: Privilégios de administrador necessários');
+  }
+}
 
 // Home (Jobs) Route
 const homeRoute = createRoute({
@@ -77,8 +77,6 @@ const logsRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  loginRoute,
-  resetPasswordRoute,
   layoutRoute.addChildren([homeRoute, connectionsRoute, logsRoute]),
 ]);
 
