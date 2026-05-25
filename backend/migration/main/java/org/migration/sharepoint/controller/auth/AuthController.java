@@ -10,6 +10,7 @@ package org.migration.sharepoint.controller.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.migration.sharepoint.controller.auth.dto.AuthenticationResponse;
 import org.migration.sharepoint.service.auth.AuthService;
 import org.springframework.security.authentication.BadCredentialsException;
