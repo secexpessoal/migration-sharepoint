@@ -123,18 +123,24 @@ public class AuthService {
             }
         }
 
-        // Limpa cookies locais
-        clearCookie(httpResponse, "access_token");
-        clearCookie(httpResponse, "refresh_token");
+        // Determina se devemos usar o flag Secure (apenas em HTTPS)
+        boolean isSecure = httpRequest.isSecure() || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"));
+
+        // Limpa cookies locais instruindo o navegador a deletá-los
+        clearCookie(httpResponse, "access_token", isSecure);
+        clearCookie(httpResponse, "refresh_token", isSecure);
+        
+        // Cabeçalho moderno para garantir a limpeza total de dados da sessão
+        httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\"");
     }
 
-    private void clearCookie(HttpServletResponse response, String name) {
+    private void clearCookie(HttpServletResponse response, String name, boolean isSecure) {
         ResponseCookie cookie = ResponseCookie.from(name, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(isSecure)
                 .path("/")
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite("Lax") // Lax é mais compatível para sobrescrever cookies de diferentes fontes
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
