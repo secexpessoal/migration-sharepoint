@@ -1,4 +1,4 @@
-import { createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/react-router';
+import { createRouter, createRoute, createRootRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AppProvider } from '@lib/app.provider';
 import { ShLayoutComponent } from '@lib/components/sh-layout/layout.component';
 import { JobsRoute } from './jobs/jobs.component';
@@ -6,6 +6,7 @@ import { ConnectionsRoute } from './connections/connections.component';
 import { LogsRoute } from './logs/logs.component';
 import { useAuthStore } from '@lib/store/auth.store';
 import { getMe } from './auth/services/auth.service';
+import { AccessDeniedComponent } from './auth/access-denied.component';
 
 // Root Route
 const rootRoute = createRootRoute({
@@ -18,7 +19,14 @@ const rootRoute = createRootRoute({
   ),
 });
 
-// Layout Route (Protected)
+// Access Denied Route (Pública para mostrar o erro)
+const accessDeniedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/access-denied',
+  component: AccessDeniedComponent,
+});
+
+// Layout Route (Protegida)
 const layoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'layout',
@@ -30,28 +38,27 @@ const layoutRoute = createRoute({
     if (!isAuthenticated || !user) {
       try {
         const profile = await getMe();
-        validateAdminAccess(profile.roles, logout);
+        validateAdminAccess(profile.roles);
       } catch (error) {
         console.error('Falha na autenticação via cookie ou perfil inválido', error);
         logout();
-        // Em Forward Auth, o gateway redirecionaria, mas aqui limpamos o estado
+        // Em Forward Auth, o gateway ou o redirecionamento subsequente lidará com a falha
       }
       return;
     }
 
     // Caso 2: Já autenticado localmente, apenas garante que ainda é um administrador
-    validateAdminAccess(user.roles, logout);
+    validateAdminAccess(user.roles);
   },
 });
 
 /**
  * Valida se a lista de roles contém permissão de administrador.
- * Caso contrário, executa logout e lança erro para interromper a rota.
+ * Caso contrário, redireciona para a tela de acesso negado.
  */
-function validateAdminAccess(roles: string[], logoutAction: () => void) {
+function validateAdminAccess(roles: string[]) {
   if (!roles.includes('ROLE_ADMIN')) {
-    logoutAction();
-    throw new Error('Acesso negado: Privilégios de administrador necessários');
+    throw redirect({ to: '/access-denied' });
   }
 }
 
@@ -76,7 +83,9 @@ const logsRoute = createRoute({
   component: LogsRoute,
 });
 
+// Construção da árvore de rotas
 const routeTree = rootRoute.addChildren([
+  accessDeniedRoute,
   layoutRoute.addChildren([homeRoute, connectionsRoute, logsRoute]),
 ]);
 
