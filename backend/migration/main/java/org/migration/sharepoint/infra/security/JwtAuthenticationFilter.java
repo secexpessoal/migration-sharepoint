@@ -9,13 +9,17 @@ package org.migration.sharepoint.infra.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -51,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             AuthenticationResponse.UserResponse profile = authService.validateToken(token);
             setSecurityContext(profile);
         } catch (Exception exception) {
-            log.debug("Token validation failed, attempting refresh: {}", exception.getMessage());
+            log.debug("Validação do token falhou, tentando refresh: {}", exception.getMessage());
             handleTokenRefresh(request, response, token);
         }
 
@@ -64,11 +68,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return authHeader.substring(7);
         }
 
-        return java.util.Optional.ofNullable(request.getCookies())
-                .map(java.util.Arrays::stream)
-                .orElse(java.util.stream.Stream.empty())
+        return Optional.ofNullable(request.getCookies())
+                .map(Arrays::stream)
+                .orElse(Stream.empty())
                 .filter(cookie -> "access_token".equals(cookie.getName()))
-                .map(jakarta.servlet.http.Cookie::getValue)
+                .map(Cookie::getValue)
                 .findFirst()
                 .orElse(null);
     }
@@ -97,7 +101,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
             } catch (Exception refreshEx) {
-                log.debug("Session refresh failed: {}", refreshEx.getMessage());
+                log.debug("Refresh da sessão falhou: {}", refreshEx.getMessage());
                 SecurityContextHolder.clearContext();
             } finally {
                 refreshLocks.remove(expiredToken);
@@ -110,7 +114,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             List<SimpleGrantedAuthority> authorities =
                     Collections.singletonList(new SimpleGrantedAuthority("ROLE_ADMIN"));
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(profile.profile().username(), null, authorities);
+                    new UsernamePasswordAuthenticationToken(profile, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
     }

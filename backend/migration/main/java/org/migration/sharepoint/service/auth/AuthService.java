@@ -12,7 +12,6 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +37,7 @@ public class AuthService {
     private String authServerUrl;
 
     private void normalizeAndAddCookies(ResponseEntity<?> externalResponse, HttpServletResponse authResponse) {
-        java.util.Optional.ofNullable(externalResponse.getHeaders().get(HttpHeaders.SET_COOKIE))
+        Optional.ofNullable(externalResponse.getHeaders().get(HttpHeaders.SET_COOKIE))
                 .ifPresent(setCookies -> setCookies.stream()
                         .map(this::normalizeCookie)
                         .forEach(normalizedCookie -> authResponse.addHeader(HttpHeaders.SET_COOKIE, normalizedCookie)));

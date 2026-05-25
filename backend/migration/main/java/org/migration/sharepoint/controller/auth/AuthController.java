@@ -12,7 +12,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.migration.sharepoint.controller.auth.dto.AuthenticationResponse;
 import org.migration.sharepoint.service.auth.AuthService;
-import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,25 +27,16 @@ public class AuthController {
     private final AuthService authService;
 
     @GetMapping("/me")
-    public AuthenticationResponse.UserResponse getMe(HttpServletRequest request) {
-        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        String token = null;
+    public AuthenticationResponse.UserResponse getMe() {
+        Object principal = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal();
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-        } else if (request.getCookies() != null) {
-            token = java.util.Arrays.stream(request.getCookies())
-                    .filter(cookie -> "access_token".equals(cookie.getName()))
-                    .map(jakarta.servlet.http.Cookie::getValue)
-                    .findFirst()
-                    .orElse(null);
+        if (principal instanceof AuthenticationResponse.UserResponse userResponse) {
+            return userResponse;
         }
 
-        if (token == null) {
-            throw new org.springframework.security.authentication.BadCredentialsException("Sessão inválida");
-        }
-
-        return authService.validateToken(token);
+        throw new BadCredentialsException("Sessão inválida ou perfil não encontrado");
     }
 
     @PostMapping("/logout")
