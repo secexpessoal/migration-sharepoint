@@ -112,63 +112,43 @@ public class AuthService {
 
         if (refreshTokenValue != null) {
             try {
-                restClient
+                // Chama o logout externo e CAPTURA a resposta para repassar os cookies de limpeza
+                ResponseEntity<Void> externalLogoutResponse = restClient
                         .post()
                         .uri("/v1/user/logout")
                         .header(HttpHeaders.COOKIE, "refresh_token=" + refreshTokenValue)
                         .retrieve()
-                        .toBodilessEntity();
+                        .toEntity(Void.class);
+
+                // Repassa os cabeçalhos Set-Cookie do servidor de autenticação (a forma mais garantida)
+                normalizeAndAddCookies(externalLogoutResponse, httpResponse);
+                
+                log.debug("Logout externo concluído, cookies de limpeza repassados");
             } catch (Exception exception) {
-                log.warn("Falha ao notificar servidor externo sobre logout", exception);
+                log.warn("Falha ao notificar servidor externo sobre logout, procedendo com limpeza local", exception);
             }
         }
 
-        // Determina se devemos usar o flag Secure (apenas em HTTPS)
+        // Fallback local: Caso o servidor externo não envie os cookies de limpeza ou falhe
+        // Tentamos limpar os nomes padrão com os atributos mais prováveis
         boolean isSecure = httpRequest.isSecure() || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"));
-        String host = httpRequest.getServerName();
-
-        // 1. Limpa cookies para o host atual (ex: app.dominio.com)
-        clearCookieAggressively(httpResponse, "access_token", isSecure, null);
-        clearCookieAggressively(httpResponse, "refresh_token", isSecure, null);
-
-        // 2. Se estiver em um subdomínio, tenta limpar para o domínio pai (ex: .dominio.com)
-        // Isso é crucial se os cookies foram setados pelo Gateway ou Servidor de Auth no domínio raiz
-        if (host != null && host.contains(".") && !host.equalsIgnoreCase("localhost")) {
-            String parentDomain = host.substring(host.indexOf("."));
-            if (parentDomain.length() > 1) {
-                clearCookieAggressively(httpResponse, "access_token", isSecure, parentDomain);
-                clearCookieAggressively(httpResponse, "refresh_token", isSecure, parentDomain);
-            }
-        }
         
-        // Cabeçalho moderno para garantir a limpeza total de dados da sessão
+        // Limpeza local "segura" para o host atual
+        clearLocalCookie(httpResponse, "access_token", isSecure);
+        clearLocalCookie(httpResponse, "refresh_token", isSecure);
+        
+        // Cabeçalho de limpeza profunda (suportado por navegadores modernos)
         httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
     }
 
-    /**
-     * Tenta limpar o cookie enviando múltiplas variações para garantir que o navegador 
-     * encontre e remova o registro correto.
-     */
-    private void clearCookieAggressively(HttpServletResponse response, String name, boolean isSecure, String domain) {
-        // Variação 1: HttpOnly = true (Padrão de segurança que usamos)
-        sendClearCookie(response, name, isSecure, domain, true);
-        
-        // Variação 2: HttpOnly = false (Caso algum proxy tenha setado sem o flag)
-        sendClearCookie(response, name, isSecure, domain, false);
-    }
-
-    private void sendClearCookie(HttpServletResponse response, String name, boolean isSecure, String domain, boolean httpOnly) {
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
+    private void clearLocalCookie(HttpServletResponse response, String name, boolean isSecure) {
+        ResponseCookie cookie = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
+                .httpOnly(true)
                 .secure(isSecure)
-                .httpOnly(httpOnly)
-                .sameSite("Lax");
-
-        if (domain != null && !domain.isEmpty()) {
-            builder.domain(domain);
-        }
-
-        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }
