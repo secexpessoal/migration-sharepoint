@@ -27,26 +27,32 @@ export async function logoutAttempt() {
 }
 
 /**
- * Tenta remover todos os cookies visíveis ao JavaScript.
- * Útil para cookies que não foram marcados como HttpOnly por proxies ou dev servers.
+ * Remove agressivamente todos os cookies visíveis ao JavaScript.
+ * Utiliza um estilo funcional e tenta múltiplas combinações de domínios e caminhos.
  */
 function clearAllClientCookies() {
-  const cookies = document.cookie.split(";");
-
-  for (let i = 0; i < cookies.length; i++) {
-    const cookie = cookies[i];
-    const eqPos = cookie.indexOf("=");
-    const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
-    
-    // Tenta deletar o cookie no path raiz e em variações de domínio
-    document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
-    document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
-    
-    // Se estiver em um subdomínio, tenta limpar no domínio pai também
-    const domainParts = window.location.hostname.split('.');
-    if (domainParts.length > 2) {
-      const parentDomain = domainParts.slice(-2).join('.');
-      document.cookie = `${name}=; Path=/; Domain=.${parentDomain}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
-    }
+  const hostname = window.location.hostname;
+  const domainParts = hostname.split('.');
+  
+  // Lista de domínios para tentar a limpeza (atual, .atual, e pai se existir)
+  const domains = [null, hostname, `.${hostname}`];
+  if (domainParts.length > 2) {
+    domains.push(domainParts.slice(-2).join('.'));
+    domains.push(`.${domainParts.slice(-2).join('.')}`);
   }
+
+  // Caminhos comuns onde cookies podem ser injetados
+  const paths = ['/', '/v1', '/api'];
+
+  document.cookie.split(';').forEach(cookie => {
+    const name = cookie.split('=')[0].trim();
+    
+    domains.forEach(domain => {
+      paths.forEach(path => {
+        let cookieString = `${name}=; Path=${path}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
+        if (domain) cookieString += ` Domain=${domain};`;
+        document.cookie = cookieString;
+      });
+    });
+  });
 }
