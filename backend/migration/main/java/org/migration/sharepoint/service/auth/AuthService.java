@@ -102,6 +102,7 @@ public class AuthService {
     }
 
     public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        log.info("Iniciando processo de logout no AuthService");
         RestClient restClient = restClientBuilder.baseUrl(authServerUrl).build();
 
         String refreshTokenValue = Arrays.stream(
@@ -113,6 +114,7 @@ public class AuthService {
 
         if (refreshTokenValue != null) {
             try {
+                log.info("Notificando servidor de autenticação externo...");
                 ResponseEntity<Void> externalLogoutResponse = restClient
                         .post()
                         .uri("/v1/user/logout")
@@ -121,73 +123,55 @@ public class AuthService {
                         .toEntity(Void.class);
 
                 normalizeAndAddCookies(externalLogoutResponse, httpResponse);
+                log.info("Servidor externo notificado com sucesso");
             } catch (Exception exception) {
-                log.warn("Falha ao notificar servidor externo sobre logout", exception);
+                log.warn("Falha ao notificar servidor externo sobre logout: {}", exception.getMessage());
             }
         }
 
-        // Determinação de segurança para o cookie de limpeza
+        // Determinação de segurança baseada nos headers do proxy e estado da conexão
         boolean isSecure = httpRequest.isSecure() 
                 || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"))
                 || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Scheme"));
         
         String host = httpRequest.getServerName();
+        log.info("Host detectado para limpeza de cookies: {}, IsSecure (detectado): {}", host, isSecure);
 
-        // Lista exata de cookies baseada no relatório do usuário
+        // Cookies exatos reportados pelo usuário
         List<String> cookiesToClear = List.of("access_token", "refresh_token", "__session", "XSRF-TOKEN");
 
-        cookiesToClear.forEach(cookieName -> {
-            // 1. Tenta limpar para o host atual (ex: tests-sharepoint-migration.secexpessoal.org)
-            clearCookieWithAllVariations(httpResponse, cookieName, isSecure, null);
-
-            // 2. Tenta limpar para o domínio pai com ponto (ex: .secexpessoal.org) - EXATAMENTE COMO NO PRINT
+        cookiesToClear.forEach(name -> {
+            // 1. Limpa no Host atual (sem domínio específico)
+            addClearCookieHeader(httpResponse, name, null, isSecure);
+            
+            // 2. Limpa no Domínio pai com ponto (ex: .secexpessoal.org)
             if (host != null && host.contains(".")) {
-                String domain = host.substring(host.indexOf(".")); // Resulta em .secexpessoal.org
+                String domain = host.substring(host.indexOf("."));
                 if (domain.length() > 1) {
-                    clearCookieWithAllVariations(httpResponse, cookieName, isSecure, domain);
-                }
-                
-                // Backup: domínio pai sem o ponto inicial
-                String bareDomain = domain.substring(1);
-                if (bareDomain.contains(".")) {
-                    clearCookieWithAllVariations(httpResponse, cookieName, isSecure, bareDomain);
+                    addClearCookieHeader(httpResponse, name, domain, isSecure);
                 }
             }
         });
         
-        // Comando atômico de limpeza do navegador
+        // Instrução final para o navegador limpar tudo
         httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
+        log.info("Headers de limpeza de cookies adicionados à resposta");
     }
 
-    /**
-     * Envia o comando de limpeza em variações de HttpOnly e Secure para garantir que 
-     * o navegador encontre o "par" exato do cookie original.
-     */
-    private void clearCookieWithAllVariations(HttpServletResponse response, String name, boolean isSecure, String domain) {
-        // Variação A: HttpOnly=true, Secure conforme detectado
-        sendSetCookie(response, name, domain, isSecure, true);
-        
-        // Variação B: HttpOnly=false, Secure conforme detectado
-        sendSetCookie(response, name, domain, isSecure, false);
+    private void addClearCookieHeader(HttpServletResponse response, String name, String domain, boolean isSecure) {
+        // Forçamos Secure se for detectado ou se estivermos em produção (secexpessoal.org costuma ser HTTPS)
+        boolean forceSecure = isSecure || (domain != null && domain.contains("secexpessoal.org"));
 
-        // Variação C: Força Secure=true mesmo se a detecção falhar (importante para cookies HTTPS)
-        if (!isSecure) {
-            sendSetCookie(response, name, domain, true, true);
-        }
-    }
-
-    private void sendSetCookie(HttpServletResponse response, String name, String domain, boolean secure, boolean httpOnly) {
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
+        ResponseCookie cookie = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
-                .secure(secure)
-                .httpOnly(httpOnly)
-                .sameSite("Lax");
-
-        if (domain != null && !domain.isEmpty()) {
-            builder.domain(domain);
-        }
-
-        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
+                .secure(forceSecure) 
+                .httpOnly(true)
+                .sameSite("Lax")
+                .domain(domain)
+                .build();
+        
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        log.info("Enviado Set-Cookie para limpeza: name={}, domain={}, secure={}", name, domain, forceSecure);
     }
 }

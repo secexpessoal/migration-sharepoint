@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
@@ -41,6 +42,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public void logout(HttpServletRequest request, HttpServletResponse response) {
+        log.info("Recebida requisição de logout para o usuário: {}", request.getRemoteUser());
         authService.logout(request, response);
     }
 }

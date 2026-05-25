@@ -9,20 +9,25 @@ export async function getMe() {
 }
 
 export async function logoutAttempt() {
+  console.log("Iniciando logoutAttempt no frontend...");
   try {
     // 1. Backend limpa cookies HttpOnly e notifica o servidor de identidade
+    console.log("Chamando endpoint de logout no backend...");
     await apiClient.post("/auth/logout");
+    console.log("Resposta do backend recebida com sucesso.");
   } catch (error) {
     console.error("Erro ao realizar logout no servidor:", error);
   } finally {
+    console.log("Executando limpeza local de cookies e estado...");
     // 2. Frontend limpa cookies visíveis (JS-accessible) como redundância
     clearAllClientCookies();
 
     // 3. Limpa o estado local (Zustand)
     useAuthStore.getState().logout();
 
-    // 4. Redirecionamento "duro" para a raiz para que o Forward Auth detecte a falta de sessão
-    window.location.href = "/";
+    // 4. Redirecionamento total para a raiz
+    console.log("Redirecionando para a raiz...");
+    window.location.replace("/");
   }
 }
 
