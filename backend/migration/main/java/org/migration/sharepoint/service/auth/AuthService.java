@@ -126,39 +126,61 @@ public class AuthService {
             }
         }
 
-        boolean isSecure = httpRequest.isSecure() || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"));
+        // Determinação de segurança para o cookie de limpeza
+        boolean isSecure = httpRequest.isSecure() 
+                || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"))
+                || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Scheme"));
+        
         String host = httpRequest.getServerName();
 
-        // Lista de cookies para limpeza baseada no padrão do sistema de referência
+        // Lista exata de cookies baseada no relatório do usuário
         List<String> cookiesToClear = List.of("access_token", "refresh_token", "__session", "XSRF-TOKEN");
 
         cookiesToClear.forEach(cookieName -> {
-            // 1. Limpa para o host atual
-            clearLocalCookieAggressively(httpResponse, cookieName, isSecure, null);
+            // 1. Tenta limpar para o host atual (ex: tests-sharepoint-migration.secexpessoal.org)
+            clearCookieWithAllVariations(httpResponse, cookieName, isSecure, null);
 
-            // 2. Limpa para o domínio pai (se houver)
-            if (host != null && host.contains(".") && !host.equalsIgnoreCase("localhost")) {
-                String parentDomain = host.substring(host.indexOf("."));
-                if (parentDomain.length() > 1) {
-                    clearLocalCookieAggressively(httpResponse, cookieName, isSecure, parentDomain);
+            // 2. Tenta limpar para o domínio pai com ponto (ex: .secexpessoal.org) - EXATAMENTE COMO NO PRINT
+            if (host != null && host.contains(".")) {
+                String domain = host.substring(host.indexOf(".")); // Resulta em .secexpessoal.org
+                if (domain.length() > 1) {
+                    clearCookieWithAllVariations(httpResponse, cookieName, isSecure, domain);
+                }
+                
+                // Backup: domínio pai sem o ponto inicial
+                String bareDomain = domain.substring(1);
+                if (bareDomain.contains(".")) {
+                    clearCookieWithAllVariations(httpResponse, cookieName, isSecure, bareDomain);
                 }
             }
         });
         
+        // Comando atômico de limpeza do navegador
         httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
     }
 
-    private void clearLocalCookieAggressively(HttpServletResponse response, String name, boolean isSecure, String domain) {
-        // Envia com HttpOnly true e false para garantir remoção
-        sendClearCookie(response, name, isSecure, domain, true);
-        sendClearCookie(response, name, isSecure, domain, false);
+    /**
+     * Envia o comando de limpeza em variações de HttpOnly e Secure para garantir que 
+     * o navegador encontre o "par" exato do cookie original.
+     */
+    private void clearCookieWithAllVariations(HttpServletResponse response, String name, boolean isSecure, String domain) {
+        // Variação A: HttpOnly=true, Secure conforme detectado
+        sendSetCookie(response, name, domain, isSecure, true);
+        
+        // Variação B: HttpOnly=false, Secure conforme detectado
+        sendSetCookie(response, name, domain, isSecure, false);
+
+        // Variação C: Força Secure=true mesmo se a detecção falhar (importante para cookies HTTPS)
+        if (!isSecure) {
+            sendSetCookie(response, name, domain, true, true);
+        }
     }
 
-    private void sendClearCookie(HttpServletResponse response, String name, boolean isSecure, String domain, boolean httpOnly) {
+    private void sendSetCookie(HttpServletResponse response, String name, String domain, boolean secure, boolean httpOnly) {
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
-                .secure(isSecure)
+                .secure(secure)
                 .httpOnly(httpOnly)
                 .sameSite("Lax");
 
