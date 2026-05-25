@@ -87,7 +87,7 @@ public class ServerSecurityConfig {
                     headers.permissionsPolicyHeader(
                             it -> it.policy("camera=(), geolocation=(), microphone=(), payment=()"));
                     headers.crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN));
-                    headers.crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN_ALLOW_POPUPS));
+                    headers.crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN));
                 });
 
         return httpSecurity.build();
