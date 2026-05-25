@@ -38,7 +38,7 @@ public class ServerSecurityConfig {
 
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
-        // Ignora segurança para recursos estáticos para evitar 403 e problemas de MIME type
+        // Ignora segurança para recursos estáticos e logout para evitar 403
         return (web) -> web.ignoring().requestMatchers(
                 "/",
                 "/index.html",
@@ -48,7 +48,8 @@ public class ServerSecurityConfig {
                 "/**/*.css",
                 "/**/*.svg",
                 "/**/*.png",
-                "/**/*.woff2"
+                "/**/*.woff2",
+                "/v1/auth/logout"
         );
     }
 
