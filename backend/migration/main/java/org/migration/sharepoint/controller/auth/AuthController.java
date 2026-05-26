@@ -9,48 +9,41 @@ package org.migration.sharepoint.controller.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.migration.sharepoint.controller.auth.dto.AuthenticationRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.migration.sharepoint.controller.auth.dto.AuthenticationResponse;
-import org.migration.sharepoint.controller.auth.dto.FirstChangePasswordRequest;
 import org.migration.sharepoint.service.auth.AuthService;
-import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/login")
-    public AuthenticationResponse login(
-            @Valid @RequestBody AuthenticationRequest request, HttpServletResponse response) {
-        return authService.login(request, response);
-    }
+    @GetMapping("/me")
+    public AuthenticationResponse.UserResponse getMe() {
+        Object principal = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal();
 
-    @PostMapping("/first-reset")
-    public Map<String, String> firstReset(
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
-            @Valid @RequestBody FirstChangePasswordRequest request) {
-        String token = authHeader.substring(7);
-        return authService.firstReset(token, request);
+        if (principal instanceof AuthenticationResponse.UserResponse userResponse) {
+            return userResponse;
+        }
+
+        throw new BadCredentialsException("Sessão inválida ou perfil não encontrado");
     }
 
     @PostMapping("/logout")
     public void logout(HttpServletRequest request, HttpServletResponse response) {
+        log.info("Recebida requisição de logout para o usuário: {}", request.getRemoteUser());
         authService.logout(request, response);
-    }
-
-    @PostMapping("/refresh")
-    public AuthenticationResponse refresh(HttpServletRequest request, HttpServletResponse response) {
-        return authService.refresh(request, response);
     }
 }

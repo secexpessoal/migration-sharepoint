@@ -8,7 +8,6 @@
 package org.migration.sharepoint.infra.config;
 
 import java.util.List;
-
 import lombok.RequiredArgsConstructor;
 import org.migration.sharepoint.infra.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +16,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -37,6 +37,23 @@ public class ServerSecurityConfig {
     private List<String> allowedOrigins;
 
     @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        // Ignora segurança para recursos estáticos e logout para evitar 403
+        return (web) -> web.ignoring().requestMatchers(
+                "/",
+                "/index.html",
+                "/favicon.ico",
+                "/assets/**",
+                "/**/*.js",
+                "/**/*.css",
+                "/**/*.svg",
+                "/**/*.png",
+                "/**/*.woff2",
+                "/v1/auth/logout"
+        );
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
 
         httpSecurity
@@ -44,48 +61,24 @@ public class ServerSecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(matcherRegistry -> matcherRegistry
-                        .requestMatchers(
-                                "/",
-                                "/login",
-                                "/reset-password",
-                                "/connections",
-                                "/logs",
-                                "/index.html",
-                                "/favicon.ico",
-                                "/error",
-                                "/assets/**",
-                                "/**/*.js",
-                                "/**/*.css",
-                                "/**/*.html",
-                                "/**/*.svg",
-                                "/**/*.png",
-                                "/**/*.jpg",
-                                "/**/*.jpeg",
-                                "/**/*.webp",
-                                "/**/*.ico",
-                                "/**/*.woff",
-                                "/**/*.woff2",
-                                "/**/*.ttf")
-                        .permitAll()
-                        .requestMatchers("/v1/auth/**")
-                        .permitAll()
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
-                        .permitAll()
-                        .requestMatchers("/actuator/health")
-                        .permitAll()
-                        .anyRequest()
-                        .hasAuthority("ROLE_ADMIN"))
+                        .requestMatchers("/v1/auth/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/error").permitAll()
+                        .anyRequest().hasAuthority("ROLE_ADMIN"))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .headers(headers -> {
                     headers.httpStrictTransportSecurity(
                             it -> it.includeSubDomains(true).maxAgeInSeconds(31536000));
+                    
+                    // CSP relaxada para suportar Cloudflare Insights e assets locais
                     headers.contentSecurityPolicy(csp -> csp.policyDirectives("""
                             default-src 'self';
-                            script-src 'self' 'unsafe-inline' chrome-extension: moz-extension:;
+                            script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com chrome-extension: moz-extension:;
                             style-src 'self' 'unsafe-inline';
                             img-src 'self' data: blob:;
                             font-src 'self' data:;
-                            connect-src 'self';
+                            connect-src 'self' https://static.cloudflareinsights.com;
                             object-src 'none';
                             frame-ancestors 'none';
                             upgrade-insecure-requests;
@@ -103,7 +96,6 @@ public class ServerSecurityConfig {
 
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
-
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));

@@ -7,28 +7,19 @@
  */
 package org.migration.sharepoint.service.auth;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.migration.sharepoint.controller.auth.dto.AuthenticationRequest;
 import org.migration.sharepoint.controller.auth.dto.AuthenticationResponse;
-import org.migration.sharepoint.controller.auth.dto.FirstChangePasswordRequest;
-import org.migration.sharepoint.infra.exception.custom.ForbiddenException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -46,74 +37,24 @@ public class AuthService {
     @Value("${auth.server.url}")
     private String authServerUrl;
 
-    public AuthenticationResponse login(AuthenticationRequest authRequest, HttpServletResponse authResponse) {
-        RestClient restClient = restClientBuilder.baseUrl(authServerUrl).build();
-
-        ResponseEntity<AuthenticationResponse> externalResponse = restClient
-                .post()
-                .uri("/v1/user/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(authRequest)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, (clientRequest, clientResponse) -> {
-                    try (InputStream responseBody = clientResponse.getBody()) {
-                        TypeReference<Map<String, Object>> mapType = new TypeReference<>() {};
-                        Map<String, Object> errorDetails = objectMapper.readValue(responseBody, mapType);
-
-                        String errorMessage = "Credenciais inválidas ou erro no servidor de autenticação externo";
-                        if (errorDetails != null && errorDetails.containsKey("message")) {
-                            errorMessage = errorDetails.get("message").toString();
-                        }
-
-                        throw new BadCredentialsException(errorMessage);
-                    } catch (IOException ioException) {
-                        log.error("Erro ao processar corpo de resposta de erro do servidor externo", ioException);
-                        throw new BadCredentialsException("Falha na comunicação com o servidor de autenticação");
-                    }
-                })
-                .toEntity(AuthenticationResponse.class);
-
-        AuthenticationResponse authData = externalResponse.getBody();
-        if (authData == null
-                || authData.user() == null
-                || !authData.user().roles().contains("ROLE_ADMIN")) {
-            throw new ForbiddenException("Acesso negado: O usuário não possui privilégios de administrador");
-        }
-
-        normalizeAndAddCookies(externalResponse, authResponse);
-
-        return authData;
-    }
-
     private void normalizeAndAddCookies(ResponseEntity<?> externalResponse, HttpServletResponse authResponse) {
-        List<String> setCookies = externalResponse.getHeaders().get(HttpHeaders.SET_COOKIE);
-        if (setCookies != null) {
-            setCookies.forEach(cookie -> {
-                // Força Path=/ e mantém HttpOnly/Secure se existirem no original
-                String normalized = cookie.replaceAll("(?i)Path=[^;]+", "Path=/");
-                if (!normalized.toLowerCase().contains("path=/")) {
-                    normalized += "; Path=/";
-                }
-                // Garante que o refresh_token especificamente seja HttpOnly se o servidor de auth esqueceu
-                if (normalized.startsWith("refresh_token=") && !normalized.toLowerCase().contains("httponly")) {
-                    normalized += "; HttpOnly";
-                }
-                authResponse.addHeader(HttpHeaders.SET_COOKIE, normalized);
-            });
-        }
+        Optional.ofNullable(externalResponse.getHeaders().get(HttpHeaders.SET_COOKIE))
+                .ifPresent(setCookies -> setCookies.stream()
+                        .map(this::normalizeCookie)
+                        .forEach(normalizedCookie -> authResponse.addHeader(HttpHeaders.SET_COOKIE, normalizedCookie)));
     }
 
-    public Map<String, String> firstReset(String accessToken, FirstChangePasswordRequest resetRequest) {
-        RestClient restClient = restClientBuilder.baseUrl(authServerUrl).build();
-
-        return restClient
-                .post()
-                .uri("/v1/password/first-change")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(resetRequest)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, String>>() {});
+    private String normalizeCookie(String cookieHeader) {
+        // Força Path=/ e mantém HttpOnly/Secure se existirem no original
+        String normalized = cookieHeader.replaceAll("(?i)Path=[^;]+", "Path=/");
+        if (!normalized.toLowerCase().contains("path=/")) {
+            normalized += "; Path=/";
+        }
+        // Garante que o refresh_token especificamente seja HttpOnly se o servidor de auth esqueceu
+        if (normalized.startsWith("refresh_token=") && !normalized.toLowerCase().contains("httponly")) {
+            normalized += "; HttpOnly";
+        }
+        return normalized;
     }
 
     public AuthenticationResponse.UserResponse validateToken(String accessToken) {
@@ -161,36 +102,76 @@ public class AuthService {
     }
 
     public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        log.info("Iniciando processo de logout no AuthService");
         RestClient restClient = restClientBuilder.baseUrl(authServerUrl).build();
 
-        String refreshTokenCookie = Arrays.stream(
+        String refreshTokenValue = Arrays.stream(
                         Optional.ofNullable(httpRequest.getCookies()).orElse(new Cookie[0]))
                 .filter(cookie -> "refresh_token".equals(cookie.getName()))
-                .map(cookie -> cookie.getName() + "=" + cookie.getValue())
+                .map(Cookie::getValue)
                 .findFirst()
                 .orElse(null);
 
-        if (refreshTokenCookie != null) {
+        if (refreshTokenValue != null) {
             try {
-                restClient
+                log.info("Notificando servidor de autenticação externo...");
+                ResponseEntity<Void> externalLogoutResponse = restClient
                         .post()
                         .uri("/v1/user/logout")
-                        .header(HttpHeaders.COOKIE, refreshTokenCookie)
+                        .header(HttpHeaders.COOKIE, "refresh_token=" + refreshTokenValue)
                         .retrieve()
-                        .toBodilessEntity();
+                        .toEntity(Void.class);
+
+                normalizeAndAddCookies(externalLogoutResponse, httpResponse);
+                log.info("Servidor externo notificado com sucesso");
             } catch (Exception exception) {
-                log.warn("Falha ao notificar servidor externo sobre logout", exception);
+                log.warn("Falha ao notificar servidor externo sobre logout: {}", exception.getMessage());
             }
         }
 
-        // Limpa cookie local
-        ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
-                .httpOnly(true)
-                .secure(true)
+        // Determinação de segurança baseada nos headers do proxy e estado da conexão
+        boolean isSecure = httpRequest.isSecure() 
+                || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"))
+                || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Scheme"));
+        
+        String host = httpRequest.getServerName();
+        log.info("Host detectado para limpeza de cookies: {}, IsSecure (detectado): {}", host, isSecure);
+
+        // Cookies exatos reportados pelo usuário
+        List<String> cookiesToClear = List.of("access_token", "refresh_token", "__session", "XSRF-TOKEN");
+
+        cookiesToClear.forEach(name -> {
+            // 1. Limpa no Host atual (sem domínio específico)
+            addClearCookieHeader(httpResponse, name, null, isSecure);
+            
+            // 2. Limpa no Domínio pai com ponto (ex: .secexpessoal.org)
+            if (host != null && host.contains(".")) {
+                String domain = host.substring(host.indexOf("."));
+                if (domain.length() > 1) {
+                    addClearCookieHeader(httpResponse, name, domain, isSecure);
+                }
+            }
+        });
+        
+        // Instrução final para o navegador limpar tudo
+        httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
+        log.info("Headers de limpeza de cookies adicionados à resposta");
+    }
+
+    private void addClearCookieHeader(HttpServletResponse response, String name, String domain, boolean isSecure) {
+        // Forçamos Secure se for detectado ou se estivermos em produção (secexpessoal.org costuma ser HTTPS)
+        boolean forceSecure = isSecure || (domain != null && domain.contains("secexpessoal.org"));
+
+        ResponseCookie cookie = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
-                .sameSite("Strict")
+                .secure(forceSecure) 
+                .httpOnly(true)
+                .sameSite("Lax")
+                .domain(domain)
                 .build();
-        httpResponse.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        log.info("Enviado Set-Cookie para limpeza: name={}, domain={}, secure={}", name, domain, forceSecure);
     }
 }
