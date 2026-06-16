@@ -41,11 +41,12 @@ COPY --from=backend-build /app/migration/build/libs/migration-0.0.1-SNAPSHOT.jar
 EXPOSE 8080
 
 ENTRYPOINT ["java", \
-  "-XX:+UseZGC", \
-  "-XX:+ZGenerational", \
+  "-XX:+UseG1GC", \
   "-XX:MaxRAMPercentage=75.0", \
+  "-XX:G1PeriodicGCInterval=10000", \
   "-XX:+UseStringDeduplication", \
-  "-XX:SoftMaxHeapSize=512m", \
+  "-XX:MinHeapFreeRatio=10", \
+  "-XX:MaxHeapFreeRatio=20", \
   "-XX:+ExitOnOutOfMemoryError", \
   "-Duser.timezone=America/Sao_Paulo", \
   "-jar", "app.jar"]
