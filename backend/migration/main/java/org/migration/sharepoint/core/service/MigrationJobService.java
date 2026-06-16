@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.migration.sharepoint.controller.job.dto.JobRequest;
 import org.migration.sharepoint.controller.job.dto.JobResponse;
 import org.migration.sharepoint.controller.job.dto.LogResponse;
@@ -97,6 +99,18 @@ public class MigrationJobService {
                         log.getFinishedAt(),
                         log.getErrorMessage()))
                 .toList();
+    }
+
+    public Page<LogResponse> findLogs(Long id, Pageable pageable) {
+        findOrThrow(id);
+        return logRepository.findByJobIdOrderByStartedAtDesc(id, pageable)
+                .map(log -> new LogResponse(
+                        log.getId(),
+                        log.getJob().getId(),
+                        log.getStatus(),
+                        log.getStartedAt(),
+                        log.getFinishedAt(),
+                        log.getErrorMessage()));
     }
 
     private void validateScheduleFields(JobRequest request) {

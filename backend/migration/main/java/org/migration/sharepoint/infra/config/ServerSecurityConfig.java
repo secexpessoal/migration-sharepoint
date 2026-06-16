@@ -9,6 +9,7 @@ package org.migration.sharepoint.infra.config;
 
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.migration.sharepoint.infra.security.ForwardAuthFilter;
 import org.migration.sharepoint.infra.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +33,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class ServerSecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ForwardAuthFilter forwardAuthFilter;
 
     @Value("${security.cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -67,6 +69,7 @@ public class ServerSecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .anyRequest().hasAuthority("ROLE_ADMIN"))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(forwardAuthFilter, JwtAuthenticationFilter.class)
                 .headers(headers -> {
                     headers.httpStrictTransportSecurity(
                             it -> it.includeSubDomains(true).maxAgeInSeconds(31536000));

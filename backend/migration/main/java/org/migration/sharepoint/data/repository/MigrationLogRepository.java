@@ -9,8 +9,11 @@ package org.migration.sharepoint.data.repository;
 
 import java.util.List;
 import org.migration.sharepoint.data.model.MigrationLog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MigrationLogRepository extends JpaRepository<MigrationLog, Long> {
     List<MigrationLog> findByJobIdOrderByStartedAtDesc(Long jobId);
+    Page<MigrationLog> findByJobIdOrderByStartedAtDesc(Long jobId, Pageable pageable);
 }

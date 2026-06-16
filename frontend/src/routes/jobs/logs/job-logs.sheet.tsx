@@ -1,4 +1,5 @@
-import { useJobLogs } from '@/lib/hooks/jobs.hook';
+import { useCallback, useRef, useEffect } from 'react';
+import { useJobLogsInfinite } from '@/lib/hooks/jobs.hook';
 import type { JobStatus } from '@/routes/jobs/jobs.type';
 import {
   Sheet,
@@ -10,7 +11,7 @@ import {
 } from '@/lib/components/ui/sheet';
 import { Badge } from '@/lib/components/ui/badge';
 import { Skeleton } from '@/lib/components/ui/skeleton';
-import { ScrollText } from 'lucide-react';
+import { ScrollText, Loader2 } from 'lucide-react';
 
 interface JobLogsSheetProps {
   jobId: number | null;
@@ -53,7 +54,41 @@ const formatDuration = (start: string, end?: string) => {
 };
 
 export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsSheetProps) => {
-  const { data: logs, isLoading, isError } = useJobLogs(jobId ?? 0);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useJobLogsInfinite(jobId ?? 0);
+
+  const logs = data?.pages.flatMap((page) => page.content) ?? [];
+  const totalElements = data?.pages[0]?.totalElements ?? 0;
+
+  const lastElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (isFetchingNextPage) return;
+      if (observerRef.current) observerRef.current.disconnect();
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage) {
+          fetchNextPage();
+        }
+      });
+
+      if (node) observerRef.current.observe(node);
+    },
+    [isFetchingNextPage, hasNextPage, fetchNextPage]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, []);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -87,15 +122,16 @@ export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsShee
             </p>
           )}
 
-          {!isLoading && !isError && (!logs || logs.length === 0) && (
+          {!isLoading && !isError && logs.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
               <ScrollText className="w-10 h-10 opacity-20" />
               <p className="text-sm">Nenhuma execução registrada.</p>
             </div>
           )}
 
-          {!isLoading && !isError && logs && logs.length > 0 && (
+          {!isLoading && !isError && logs.length > 0 && (
             <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">{totalElements} execução(ões) encontrada(s)</p>
               {logs.map((log) => {
                 const meta = statusMeta[log.status];
                 return (
@@ -123,6 +159,23 @@ export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsShee
                   </div>
                 );
               })}
+
+              {hasNextPage && (
+                <div ref={lastElementRef} className="py-4 flex justify-center">
+                  {isFetchingNextPage && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Carregando mais...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!hasNextPage && logs.length > 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  Todos os {totalElements} registros foram carregados
+                </p>
+              )}
             </div>
           )}
         </SheetBody>
