@@ -1,4 +1,5 @@
-import { useJobLogs } from '@lib/hooks/jobs.hook';
+import { useCallback, useRef, useEffect } from 'react';
+import { useJobLogsInfinite } from '@lib/hooks/jobs.hook';
 import {
   ShSheet,
   ShSheetContent,
@@ -55,7 +56,43 @@ const statusBadgeVariant = (status: LogResponse['status']) => {
 };
 
 export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsSheetProps) => {
-  const { data: logs, isLoading, isError, refetch, isFetching } = useJobLogs(jobId ?? 0);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useJobLogsInfinite(jobId ?? 0);
+
+  const logs = data?.pages.flatMap((page) => page.content) ?? [];
+  const totalElements = data?.pages[0]?.totalElements ?? 0;
+
+  const lastElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (isFetchingNextPage) return;
+      if (observerRef.current) observerRef.current.disconnect();
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage) {
+          fetchNextPage();
+        }
+      });
+
+      if (node) observerRef.current.observe(node);
+    },
+    [isFetchingNextPage, hasNextPage, fetchNextPage]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, []);
 
   return (
     <ShSheet open={open} onOpenChange={onOpenChange}>
@@ -98,7 +135,7 @@ export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsShee
             <div className="p-6 text-center text-sm text-destructive">
               Erro ao carregar logs. Verifique se o servidor está rodando.
             </div>
-          ) : !logs || logs.length === 0 ? (
+          ) : logs.length === 0 ? (
             <div className="p-10 flex flex-col items-center gap-3 text-muted-foreground">
               <ScrollText className="w-10 h-10 opacity-20" />
               <p className="text-sm">Nenhuma execução registrada ainda.</p>
@@ -141,6 +178,23 @@ export const JobLogsSheet = ({ jobId, jobName, open, onOpenChange }: JobLogsShee
                   </div>
                 </div>
               ))}
+
+              {hasNextPage && (
+                <div ref={lastElementRef} className="py-4 flex justify-center">
+                  {isFetchingNextPage && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Carregando mais...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!hasNextPage && logs.length > 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  Todos os {totalElements} registros foram carregados
+                </p>
+              )}
             </div>
           )}
         </ShSheetBody>

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { jobsService } from '@lib/services/jobs.service';
 import type { JobRequest } from '@routes/jobs/jobs.type';
 
@@ -62,6 +62,19 @@ export const useJobLogs = (id: number) => {
   return useQuery({
     queryKey: ['jobs', id, 'logs'],
     queryFn: () => jobsService.getLogs(id),
+    enabled: !!id,
+  });
+};
+
+export const useJobLogsInfinite = (id: number, pageSize = 20) => {
+  return useInfiniteQuery({
+    queryKey: ['jobs', id, 'logs', 'infinite'],
+    queryFn: ({ pageParam = 0 }) => jobsService.getLogsPaged(id, { page: pageParam, size: pageSize }),
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined;
+      return lastPage.number + 1;
+    },
+    initialPageParam: 0,
     enabled: !!id,
   });
 };

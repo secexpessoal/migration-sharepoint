@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useJobs, useJobLogs } from '@lib/hooks/jobs.hook';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useJobs, useJobLogsInfinite } from '@lib/hooks/jobs.hook';
 import { ShSelect, ShSelectItem } from '@lib/components/sh-select/select.component';
 import { ShButton } from '@lib/components/sh-button/button.component';
 import { ShBadge } from '@lib/components/sh-badge/badge.component';
@@ -45,21 +45,49 @@ const badgeVariant = (status: LogResponse['status']) => {
 
 export const LogsRoute = () => {
   const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const { data: jobs, isLoading: loadingJobs } = useJobs();
   const {
-    data: logs,
+    data,
     isLoading: loadingLogs,
     isError,
     refetch,
     isFetching,
-  } = useJobLogs(selectedJobId ? parseInt(selectedJobId) : 0);
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useJobLogsInfinite(selectedJobId ? parseInt(selectedJobId) : 0);
+
+  const logs = data?.pages.flatMap((page) => page.content) ?? [];
+  const totalElements = data?.pages[0]?.totalElements ?? 0;
 
   const selectedJob = jobs?.find((j) => j.id === parseInt(selectedJobId));
 
+  const lastElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (isFetchingNextPage) return;
+      if (observerRef.current) observerRef.current.disconnect();
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage) {
+          fetchNextPage();
+        }
+      });
+
+      if (node) observerRef.current.observe(node);
+    },
+    [isFetchingNextPage, hasNextPage, fetchNextPage]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Audit Logs</h2>
@@ -72,7 +100,6 @@ export const LogsRoute = () => {
         )}
       </div>
 
-      {/* Job selector */}
       <div className="flex items-center gap-3">
         <div className="w-72">
           <ShSelect
@@ -95,7 +122,6 @@ export const LogsRoute = () => {
         )}
       </div>
 
-      {/* No job selected */}
       {!selectedJobId && (
         <ShCard className="border-dashed">
           <ShCardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
@@ -105,7 +131,6 @@ export const LogsRoute = () => {
         </ShCard>
       )}
 
-      {/* Loading logs */}
       {selectedJobId && loadingLogs && (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -123,7 +148,6 @@ export const LogsRoute = () => {
         </div>
       )}
 
-      {/* Error */}
       {selectedJobId && isError && (
         <ShCard className="border-destructive/30">
           <ShCardContent className="py-10 text-center text-sm text-destructive">
@@ -132,8 +156,7 @@ export const LogsRoute = () => {
         </ShCard>
       )}
 
-      {/* Empty logs */}
-      {selectedJobId && !loadingLogs && !isError && logs?.length === 0 && (
+      {selectedJobId && !loadingLogs && !isError && logs.length === 0 && (
         <ShCard className="border-dashed">
           <ShCardContent className="py-14 flex flex-col items-center gap-3 text-muted-foreground">
             <ScrollText className="w-10 h-10 opacity-20" />
@@ -143,10 +166,9 @@ export const LogsRoute = () => {
         </ShCard>
       )}
 
-      {/* Log entries */}
-      {selectedJobId && !loadingLogs && logs && logs.length > 0 && (
+      {selectedJobId && !loadingLogs && logs.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">{logs.length} execução(ões) encontrada(s)</p>
+          <p className="text-xs text-muted-foreground">{totalElements} execução(ões) encontrada(s)</p>
           {logs.map((log) => (
             <ShCard key={log.id} className="overflow-hidden">
               <ShCardContent className="py-0">
@@ -176,6 +198,23 @@ export const LogsRoute = () => {
               </ShCardContent>
             </ShCard>
           ))}
+
+          {hasNextPage && (
+            <div ref={lastElementRef} className="py-4 flex justify-center">
+              {isFetchingNextPage && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Carregando mais...
+                </div>
+              )}
+            </div>
+          )}
+
+          {!hasNextPage && logs.length > 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Todos os {totalElements} registros foram carregados
+            </p>
+          )}
         </div>
       )}
     </div>
