@@ -15,5 +15,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MigrationLogRepository extends JpaRepository<MigrationLog, Long> {
     List<MigrationLog> findByJobIdOrderByStartedAtDesc(Long jobId);
+
     Page<MigrationLog> findByJobIdOrderByStartedAtDesc(Long jobId, Pageable pageable);
 }

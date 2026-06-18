@@ -79,7 +79,7 @@ public class MySqlMigrationWriter implements MigrationWriter {
     }
 
     @Override
-    public List<Long> write(
+    public List<Object> write(
             String key,
             String table,
             List<Map<String, Object>> rows,
@@ -133,7 +133,7 @@ public class MySqlMigrationWriter implements MigrationWriter {
         }
     }
 
-    private List<Long> batchUpsert(
+    private List<Object> batchUpsert(
             Connection connection,
             String table,
             List<String> columns,
@@ -142,7 +142,7 @@ public class MySqlMigrationWriter implements MigrationWriter {
             throws SQLException {
         String primaryKey = findPrimaryKey(types);
         String sql = buildUpsertSql(connection, table, columns, primaryKey);
-        List<Long> keys = new ArrayList<>();
+        List<Object> keys = new ArrayList<>();
 
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             partition(rows, batchSize).forEach(batch -> {
@@ -371,7 +371,7 @@ public class MySqlMigrationWriter implements MigrationWriter {
                 });
     }
 
-    private void collectKeys(PreparedStatement preparedStatement, List<Long> keys) throws SQLException {
+    private void collectKeys(PreparedStatement preparedStatement, List<Object> keys) throws SQLException {
         try (ResultSet resultSet = preparedStatement.getGeneratedKeys()) {
             while (resultSet.next()) keys.add(resultSet.getLong(1));
         }

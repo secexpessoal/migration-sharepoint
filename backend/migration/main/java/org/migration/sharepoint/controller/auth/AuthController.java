@@ -30,9 +30,8 @@ public class AuthController {
 
     @GetMapping("/me")
     public AuthenticationResponse.UserResponse getMe() {
-        Object principal = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getPrincipal();
+        Object principal =
+                SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
         if (principal instanceof AuthenticationResponse.UserResponse userResponse) {
             return userResponse;

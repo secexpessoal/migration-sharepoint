@@ -15,8 +15,6 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.migration.sharepoint.controller.job.dto.JobRequest;
 import org.migration.sharepoint.controller.job.dto.JobResponse;
 import org.migration.sharepoint.controller.job.dto.LogResponse;
@@ -32,6 +30,8 @@ import org.migration.sharepoint.infra.connection.ConnectionRegistry;
 import org.migration.sharepoint.infra.exception.ErrorCode;
 import org.migration.sharepoint.infra.exception.custom.BadRequestException;
 import org.migration.sharepoint.infra.exception.custom.NotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,7 +103,8 @@ public class MigrationJobService {
 
     public Page<LogResponse> findLogs(Long id, Pageable pageable) {
         findOrThrow(id);
-        return logRepository.findByJobIdOrderByStartedAtDesc(id, pageable)
+        return logRepository
+                .findByJobIdOrderByStartedAtDesc(id, pageable)
                 .map(log -> new LogResponse(
                         log.getId(),
                         log.getJob().getId(),

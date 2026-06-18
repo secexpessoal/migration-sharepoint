@@ -154,18 +154,18 @@ public class SharePointMigrationJob implements Job {
     }
 
     private static class RelationalContext {
-        private final Map<String, Map<Object, Long>> idMap = new java.util.concurrent.ConcurrentHashMap<>();
+        private final Map<String, Map<Object, Object>> idMap = new java.util.concurrent.ConcurrentHashMap<>();
 
-        public void addMapping(String table, Object sharePointId, Long databaseId) {
+        public void addMapping(String table, Object sharePointId, Object databaseId) {
             Optional.ofNullable(sharePointId)
                     .ifPresent(id -> idMap.computeIfAbsent(table, k -> new java.util.concurrent.ConcurrentHashMap<>())
                             .put(id, databaseId));
         }
 
-        public Long getDbId(String table, Object sharePointId) {
+        public Object getDbId(String table, Object sharePointId) {
             return Optional.ofNullable(sharePointId)
                     .map(id -> {
-                        Map<Object, Long> tableMap = idMap.getOrDefault(table, Collections.emptyMap());
+                        Map<Object, Object> tableMap = idMap.getOrDefault(table, Collections.emptyMap());
                         return Optional.ofNullable(tableMap.get(id))
                                 .or(() -> Optional.ofNullable(tableMap.get(String.valueOf(id))))
                                 .or(() -> tryParseInt(id).map(tableMap::get))
@@ -224,7 +224,7 @@ public class SharePointMigrationJob implements Job {
                     ErrorCode.INTERNAL_SERVER_ERROR, "Writer não encontrado para o banco %s".formatted(targetDb));
         }
 
-        List<Long> generatedKeys = writer.write(
+        List<Object> generatedKeys = writer.write(
                 connectionKey,
                 node.getTableName(),
                 dataToWrite,
@@ -282,7 +282,7 @@ public class SharePointMigrationJob implements Job {
                         lookupValue = row.get("_sp_id");
                     }
 
-                    Long databaseId = context.getDbId(parent, lookupValue);
+                    Object databaseId = context.getDbId(parent, lookupValue);
                     if (databaseId != null) {
                         row.put(foreignKey.getLocalColumn(), databaseId);
                     }
@@ -293,11 +293,11 @@ public class SharePointMigrationJob implements Job {
             String table,
             List<Map<String, Object>> allMappedData,
             List<Map<String, Object>> writtenData,
-            List<Long> generatedKeys,
+            List<Object> generatedKeys,
             List<String> uniqueCols,
             RelationalContext context) {
 
-        Map<List<Object>, Long> valueToDbId = new HashMap<>();
+        Map<List<Object>, Object> valueToDbId = new HashMap<>();
 
         if (!uniqueCols.isEmpty() && writtenData.size() == generatedKeys.size()) {
             for (int it = 0; it < writtenData.size(); it++) {
@@ -314,7 +314,7 @@ public class SharePointMigrationJob implements Job {
             Map<String, Object> row = allMappedData.get(it);
             Object spId = row.get("_sp_id");
 
-            Long dbId;
+            Object dbId;
             if (uniqueCols.isEmpty()) {
                 // Standard 1:1 mapping (indices correspond if no distinct filter used)
                 dbId = (it < generatedKeys.size()) ? generatedKeys.get(it) : null;
