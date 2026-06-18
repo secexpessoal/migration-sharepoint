@@ -71,8 +71,7 @@ public class AuthService {
                 .body(AuthenticationResponse.UserResponse.class);
     }
 
-    public AuthenticationResponse refresh(
-            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+    public AuthenticationResponse refresh(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         RestClient restClient = restClientBuilder.baseUrl(authServerUrl).build();
 
         String refreshTokenCookie = Arrays.stream(
@@ -130,10 +129,10 @@ public class AuthService {
         }
 
         // Determinação de segurança baseada nos headers do proxy e estado da conexão
-        boolean isSecure = httpRequest.isSecure() 
+        boolean isSecure = httpRequest.isSecure()
                 || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"))
                 || "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Scheme"));
-        
+
         String host = httpRequest.getServerName();
         log.info("Host detectado para limpeza de cookies: {}, IsSecure (detectado): {}", host, isSecure);
 
@@ -143,7 +142,7 @@ public class AuthService {
         cookiesToClear.forEach(name -> {
             // 1. Limpa no Host atual (sem domínio específico)
             addClearCookieHeader(httpResponse, name, null, isSecure);
-            
+
             // 2. Limpa no Domínio pai com ponto (ex: .secexpessoal.org)
             if (host != null && host.contains(".")) {
                 String domain = host.substring(host.indexOf("."));
@@ -152,7 +151,7 @@ public class AuthService {
                 }
             }
         });
-        
+
         // Instrução final para o navegador limpar tudo
         httpResponse.setHeader("Clear-Site-Data", "\"cookies\", \"storage\", \"cache\"");
         log.info("Headers de limpeza de cookies adicionados à resposta");
@@ -165,12 +164,12 @@ public class AuthService {
         ResponseCookie cookie = ResponseCookie.from(name, "")
                 .path("/")
                 .maxAge(0)
-                .secure(forceSecure) 
+                .secure(forceSecure)
                 .httpOnly(true)
                 .sameSite("Lax")
                 .domain(domain)
                 .build();
-        
+
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         log.info("Enviado Set-Cookie para limpeza: name={}, domain={}, secure={}", name, domain, forceSecure);
     }

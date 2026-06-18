@@ -31,9 +31,9 @@ public interface MigrationWriter {
      *            mapa de coluna de destino → FieldMapping com tipo declarado
      * @param foreignKeys
      *            lista de chaves estrangeiras para este nodo (apenas para SQL)
-     * @return lista de IDs gerados (AUTO_INCREMENT) para cada linha inserida, na mesma ordem de {@code rows}
+     * @return lista de IDs gerados ou resolvidos para cada linha inserida/atualizada, na mesma ordem de {@code rows}
      */
-    List<Long> write(
+    List<Object> write(
             String connectionKey,
             String targetName,
             List<Map<String, Object>> rows,

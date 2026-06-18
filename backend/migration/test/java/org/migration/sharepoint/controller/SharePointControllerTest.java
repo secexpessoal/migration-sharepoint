@@ -11,9 +11,9 @@ import org.migration.sharepoint.controller.sharepoint.SharePointController;
 import org.migration.sharepoint.infra.exception.ErrorCode;
 import org.migration.sharepoint.infra.exception.custom.BadRequestException;
 import org.migration.sharepoint.infra.exception.custom.InfrastructureException;
+import org.migration.sharepoint.infra.filter.RateLimitingFilter;
 import org.migration.sharepoint.infra.graph.GraphClient;
 import org.migration.sharepoint.infra.graph.GraphClient.SharePointResolveResult;
-import org.migration.sharepoint.infra.filter.RateLimitingFilter;
 import org.migration.sharepoint.infra.security.JwtAuthenticationFilter;
 import org.migration.sharepoint.service.auth.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +28,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = "security.rate-limit.enabled=false")
 class SharePointControllerTest {
-
 
     @Autowired
     private MockMvc mockMvc;

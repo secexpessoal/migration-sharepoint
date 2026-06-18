@@ -48,5 +48,6 @@ ENTRYPOINT ["java", \
   "-XX:MinHeapFreeRatio=10", \
   "-XX:MaxHeapFreeRatio=20", \
   "-XX:+ExitOnOutOfMemoryError", \
+  "--enable-native-access=ALL-UNNAMED", \
   "-Duser.timezone=America/Sao_Paulo", \
   "-jar", "app.jar"]

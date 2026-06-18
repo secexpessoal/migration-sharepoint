@@ -49,8 +49,8 @@ public class ForwardAuthFilter extends OncePerRequestFilter {
         String forwardedRoles = request.getHeader("X-Forwarded-Roles");
 
         if (forwardedUser != null || forwardedEmail != null) {
-            AuthenticationResponse.UserResponse profile = buildProfileFromHeaders(
-                    forwardedUser, forwardedEmail, forwardedRoles);
+            AuthenticationResponse.UserResponse profile =
+                    buildProfileFromHeaders(forwardedUser, forwardedEmail, forwardedRoles);
             setSecurityContext(profile);
             filterChain.doFilter(request, response);
             return;
@@ -65,17 +65,11 @@ public class ForwardAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private AuthenticationResponse.UserResponse buildProfileFromHeaders(
-            String userId, String email, String roles) {
-        List<String> roleList = roles != null
-                ? List.of(roles.split(","))
-                : List.of("ROLE_ADMIN");
+    private AuthenticationResponse.UserResponse buildProfileFromHeaders(String userId, String email, String roles) {
+        List<String> roleList = roles != null ? List.of(roles.split(",")) : List.of("ROLE_ADMIN");
 
         AuthenticationResponse.ProfileDto profileData = new AuthenticationResponse.ProfileDto(
-                userId != null ? userId : "forwarded-user",
-                "000000",
-                "Forwarded User"
-        );
+                userId != null ? userId : "forwarded-user", "000000", "Forwarded User");
 
         UUID uuid;
         try {
@@ -85,28 +79,15 @@ public class ForwardAuthFilter extends OncePerRequestFilter {
         }
 
         return new AuthenticationResponse.UserResponse(
-                uuid,
-                email != null ? email : "forwarded@localhost",
-                true,
-                roleList,
-                profileData
-        );
+                uuid, email != null ? email : "forwarded@localhost", true, roleList, profileData);
     }
 
     private AuthenticationResponse.UserResponse buildDevProfile() {
-        AuthenticationResponse.ProfileDto profileData = new AuthenticationResponse.ProfileDto(
-                "dev.admin",
-                "000001",
-                "Dev Admin"
-        );
+        AuthenticationResponse.ProfileDto profileData =
+                new AuthenticationResponse.ProfileDto("dev.admin", "000001", "Dev Admin");
 
         return new AuthenticationResponse.UserResponse(
-                UUID.fromString(devUserId),
-                devUserEmail,
-                true,
-                List.of("ROLE_ADMIN"),
-                profileData
-        );
+                UUID.fromString(devUserId), devUserEmail, true, List.of("ROLE_ADMIN"), profileData);
     }
 
     private void setSecurityContext(AuthenticationResponse.UserResponse profile) {

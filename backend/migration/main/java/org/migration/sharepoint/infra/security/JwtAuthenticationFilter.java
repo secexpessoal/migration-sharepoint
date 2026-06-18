@@ -41,7 +41,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final Map<String, Object> refreshLocks = new ConcurrentHashMap<>();
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
+    protected void doFilterInternal(
+            HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
         String token = extractToken(request);
@@ -93,7 +94,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     if (newAuthData != null && newAuthData.session() != null) {
                         AuthenticationResponse.UserSessionResponse newSession = newAuthData.session();
-                        AuthenticationResponse.UserResponse profile = authService.validateToken(newSession.accessToken());
+                        AuthenticationResponse.UserResponse profile =
+                                authService.validateToken(newSession.accessToken());
                         setSecurityContext(profile);
 
                         response.setHeader("X-New-Access-Token", newSession.accessToken());

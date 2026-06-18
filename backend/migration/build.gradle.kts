@@ -48,7 +48,7 @@ dependencies {
     runtimeOnly(libs.sqlite.jdbc)
     runtimeOnly(libs.mysql.connector.j)
     runtimeOnly(libs.postgresql)
-    runtimeOnly(libs.mongodb.driver.sync)
+    implementation(libs.mongodb.driver.sync)
     annotationProcessor(libs.lombok)
     testImplementation(libs.spring.boot.starter.actuator.test)
     testImplementation(libs.spring.boot.starter.data.jpa.test)
@@ -62,6 +62,11 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+tasks.withType<org.springframework.boot.gradle.tasks.run.BootRun> {
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 spotless {
