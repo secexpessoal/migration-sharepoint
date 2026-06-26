@@ -45,7 +45,7 @@ All dependencies are declared in `gradle/libs.versions.toml` and referenced via 
 
 **SPA routing:** `SpaForwardController` forwards all unmatched GET requests (no file extension) to `index.html` using `forward:` (not redirect).
 
-**Security:** `ServerSecurityConfig` is stateless (no session). All GETs and Swagger endpoints are public; everything else requires authentication. Security headers are hardened (HSTS, CSP, COOP, CORP, Referrer-Policy, Permissions-Policy).
+**Security:** `ServerSecurityConfig` is stateless (no session). SPA assets, auth endpoints, actuator health, and error handling are public; Swagger and application endpoints require admin authority (`ROLE_ADMIN` or normalized `ADMIN`). Security headers are hardened (HSTS, CSP, COOP, CORP, Referrer-Policy, Permissions-Policy).
 
 **Rate limiting:** `RateLimitingFilter` uses Bucket4j (100 req/min per IP, in-memory). Toggle with `security.rate-limit.enabled=false`. API routes return JSON 429; non-API routes redirect to `/?error_code=429`.
 
