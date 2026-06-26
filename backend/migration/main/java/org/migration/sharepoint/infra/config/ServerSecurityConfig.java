@@ -46,6 +46,13 @@ public class ServerSecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(matcherRegistry -> matcherRegistry
                         .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml")
+                        .hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(
                                 "/",
                                 "/index.html",
                                 "/favicon.ico",
@@ -57,8 +64,6 @@ public class ServerSecurityConfig {
                                 "/**/*.woff2")
                         .permitAll()
                         .requestMatchers("/v1/auth/**")
-                        .permitAll()
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
                         .permitAll()
                         .requestMatchers("/actuator/health")
                         .permitAll()
